@@ -47,23 +47,17 @@ class Converter:
         # Note: get_fit_laps(), get_fit_points(), get_dataframes() are shamelessly copied (and adapted) from:
         # https://github.com/bunburya/fitness_tracker_data_parsing/blob/main/parse_fit.py
 
-    def _get_fit_laps(self, frame: fitdecode.records.FitDataMessage) \
-            -> Dict[str, Union[float, datetime, timedelta, int]]:
+    def _get_fit_laps(self, frame: fitdecode.records.FitDataMessage) -> Dict[str, Union[float, datetime, timedelta, int]]:
         """Extract some data from a FIT frame representing a lap and return it as a dict.
         """
-        # Step 0: Initialise data output
-        data: Dict[str, Union[float, datetime, timedelta, int]] = {}
-
-        # Step 1: Extract all other fields
-        #  (excluding 'number' (lap number) because we don't get that from the data but rather count it ourselves)
-        for field in self._colnames_laps[1:]:
-            if frame.has_field(field):
-                data[field] = frame.get_value(field)
-
-        return data
+        return {
+            field: frame.get_value(field)
+            for field in self._colnames_laps[1:]
+            if frame.has_field(field)
+        }
 
     def _get_fit_points(self, frame: fitdecode.records.FitDataMessage) \
-            -> Optional[Dict[str, Union[float, int, str, datetime]]]:
+                -> Optional[Dict[str, Union[float, int, str, datetime]]]:
         """Extract some data from an FIT frame representing a track point and return it as a dict.
         """
         # Step 0: Initialise data output
@@ -166,7 +160,7 @@ class Converter:
         # Step 2: Assign GPX track metadata
         gpx.tracks[0].name = gpx_name
         gpx.tracks[0].type = gpx_type
-        gpx.tracks[0].description = gpx_desc if not pd.isna(gpx_desc) else None
+        gpx.tracks[0].description = None if pd.isna(gpx_desc) else gpx_desc
         gpx.tracks[0].link = gpx_link
 
         # Step 3: Add points from dataframe to GPX track:
@@ -197,7 +191,7 @@ class Converter:
 
         output_extension = os.path.splitext(f_out)[1]
         if output_extension != ".gpx":
-            raise TypeError(f"Output file must be a .gpx file.")
+            raise TypeError("Output file must be a .gpx file.")
 
         # Step 1: Convert FIT to pd.DataFrame
         df_laps, df_points = self.fit_to_dataframes(f_in)
@@ -300,18 +294,16 @@ class StravaConverter(Converter):
         for path_zip in zip_paths:
             path_unzip = path_zip.replace('.gz', '')
 
-            # Check if file has already been unzipped:
             if path_unzip in os.listdir(self._dir_activities):
                 continue
 
-            else:
-                # Unzip file
-                with gzip.open(path_zip, 'rb') as f_in:
-                    with open(path_unzip, 'wb') as f_out:
-                        shutil.copyfileobj(f_in, f_out)
+            # Unzip file
+            with gzip.open(path_zip, 'rb') as f_in:
+                with open(path_unzip, 'wb') as f_out:
+                    shutil.copyfileobj(f_in, f_out)
 
-                # Delete zip file
-                os.remove(path_zip)
+            # Delete zip file
+            os.remove(path_zip)
 
         # Step 3: Check the correct number of activities is given
         if self.status_msg:
